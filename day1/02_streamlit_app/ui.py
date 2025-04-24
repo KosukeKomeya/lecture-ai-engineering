@@ -61,34 +61,58 @@ def display_feedback_form():
     """フィードバック入力フォームを表示する"""
     with st.form("feedback_form"):
         st.subheader("フィードバック")
-        feedback_options = ["正確", "部分的に正確", "不正確"]
-        # label_visibility='collapsed' でラベルを隠す
-        feedback = st.radio("回答の評価", feedback_options, key="feedback_radio", label_visibility='collapsed', horizontal=True)
+        
+        # ラジオボタンを表示
+        feedback_options = ["不正確", "部分的に正確", "正確"]
+        feedback_radio = st.radio(
+            "回答の評価を選択してください",
+            feedback_options,
+            index=1,  # 初期値は「部分的に正確」
+            horizontal=True
+        )
+        
+        # ラジオボタンの選択に応じてスライダーの値を設定
+        initial_slider_value = {
+            "不正確": 0.0,
+            "部分的に正確": 0.5,
+            "正確": 1.0
+        }[feedback_radio]
+        
+        # スライダーを表示（ラジオボタンの選択に応じて初期値を設定）
+        feedback_score = st.slider(
+            "回答のスコアを入力してください（0.0: 不正確, 1.0: 非常に正確）", 
+            min_value=0.0, max_value=1.0, value=initial_slider_value, step=0.5
+        )
+        
+        # スライダーの値に応じてラジオボタンの選択を更新
+        updated_feedback_radio = {
+            0.0: "不正確",
+            0.5: "部分的に正確",
+            1.0: "正確"
+        }.get(feedback_score, "部分的に正確")  # デフォルト値は「部分的に正確」
+        
+        # フィードバック入力欄
         correct_answer = st.text_area("より正確な回答（任意）", key="correct_answer_input", height=100)
         feedback_comment = st.text_area("コメント（任意）", key="feedback_comment_input", height=100)
+        
+        # フォーム送信ボタン
         submitted = st.form_submit_button("フィードバックを送信")
+        
         if submitted:
             # フィードバックをデータベースに保存
-            is_correct = 1.0 if feedback == "正確" else (0.5 if feedback == "部分的に正確" else 0.0)
-            # コメントがない場合でも '正確' などの評価はfeedbackに含まれるようにする
-            combined_feedback = f"{feedback}"
-            if feedback_comment:
-                combined_feedback += f": {feedback_comment}"
-
             save_to_db(
                 st.session_state.current_question,
                 st.session_state.current_answer,
-                combined_feedback,
-                correct_answer,
-                is_correct,
+                feedback_comment,  # コメント
+                correct_answer,    # より正確な回答
+                feedback_score,    # スライダーで選択したスコア
                 st.session_state.response_time
             )
+            
+            # フィードバック完了状態を更新
             st.session_state.feedback_given = True
-            st.success("フィードバックが保存されました！")
-            # フォーム送信後に状態をリセットしない方が、ユーザーは結果を確認しやすいかも
-            # 必要ならここでリセットして st.rerun()
-            st.rerun() # フィードバックフォームを消すために再実行
-
+            st.success(f"フィードバックが保存されました！（スコア: {feedback_score}, 評価: {updated_feedback_radio}）")
+            st.rerun()  # フィードバックフォームを消すために再実行
 # --- 履歴閲覧ページのUI ---
 def display_history_page():
     """履歴閲覧ページのUIを表示する"""
@@ -97,6 +121,19 @@ def display_history_page():
 
     if history_df.empty:
         st.info("まだチャット履歴がありません。")
+        return
+
+    # 検索機能を追加
+    search_query = st.text_input("チャット履歴を検索", placeholder="キーワードを入力してください")
+    if search_query:
+        history_df = history_df[history_df.apply(
+            lambda row: search_query.lower() in str(row["question"]).lower() 
+                        or search_query.lower() in str(row["answer"]).lower(), 
+            axis=1
+        )]
+    
+    if history_df.empty:
+        st.warning("該当する履歴が見つかりませんでした。")
         return
 
     # タブでセクションを分ける
