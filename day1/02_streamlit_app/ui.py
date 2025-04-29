@@ -1,3 +1,5 @@
+#改善内容：履歴閲覧ページに検索機能を追加（128行）、回答への評価にスライダーを追加（７６行）
+
 # ui.py
 import streamlit as st
 import pandas as pd
